@@ -1,0 +1,217 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  background: #0f0f0f;
+  color: #f0f0f0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+#app {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: #aaa;
+  font-size: 0.95rem;
+}
+
+/* --- Upload zone --- */
+.upload-zone {
+  border: 2px dashed #444;
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.upload-zone:focus-within {
+  border-color: #fe2c55;
+}
+
+.file-label {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-label input[type="file"] {
+  /* visually hidden but accessible */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.filename-display {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: #ccc;
+  word-break: break-all;
+}
+
+/* --- Buttons --- */
+.btn {
+  display: inline-block;
+  padding: 0.65rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #fe2c55;
+  color: #fff;
+  width: 100%;
+}
+
+.btn-primary:not(:disabled):hover {
+  background: #e0243f;
+}
+
+.btn-download {
+  background: #25f4ee;
+  color: #000;
+}
+
+.btn-download:hover {
+  background: #1dd8d3;
+}
+
+/* --- Error area --- */
+.error-area {
+  background: #3a0a0a;
+  border: 1px solid #7a1a1a;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+}
+
+/* --- Progress --- */
+.progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.progress-section label {
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+progress {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #333;
+  overflow: hidden;
+}
+
+progress::-webkit-progress-bar {
+  background: #333;
+  border-radius: 5px;
+}
+
+progress::-webkit-progress-value {
+  background: #fe2c55;
+  border-radius: 5px;
+  transition: width 0.1s;
+}
+
+progress::-moz-progress-bar {
+  background: #fe2c55;
+  border-radius: 5px;
+}
+
+#progress-label {
+  font-size: 0.85rem;
+  color: #aaa;
+  text-align: right;
+}
+
+/* --- Download section --- */
+.download-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.download-section p {
+  color: #25f4ee;
+  font-weight: 600;
+}
+
+/* --- Compatibility warning --- */
+.compat-warning {
+  background: #1a1a1a;
+  border: 1px solid #555;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.compat-warning h2 {
+  font-size: 1.25rem;
+  color: #fe2c55;
+}
+
+.compat-warning p {
+  color: #aaa;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* --- State: processing (body-level class) --- */
+body.state-processing .upload-zone {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* --- State: done --- */
+body.state-done .progress-section {
+  opacity: 0.6;
+}
+
+/* --- State: error --- */
+body.state-error .upload-zone {
+  border-color: #7a1a1a;
+}

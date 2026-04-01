@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TikTok Video Resizer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="app">
+    <h1>TikTok Video Resizer</h1>
+    <p class="subtitle">Center-crop any horizontal video to 9:16 — entirely in your browser.</p>
+
+    <section id="upload-zone" class="upload-zone">
+      <label for="file-input" class="file-label">
+        <span id="file-label-text">Choose a video file or drag &amp; drop</span>
+        <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/webm,video/*" />
+      </label>
+      <p id="filename-display" class="filename-display" hidden></p>
+    </section>
+
+    <div id="error-area" class="error-area" role="alert" hidden></div>
+
+    <button id="process-btn" class="btn btn-primary" disabled>Convert to 9:16</button>
+
+    <section id="progress-section" class="progress-section" hidden>
+      <label for="progress-bar">Processing…</label>
+      <progress id="progress-bar" value="0" max="1"></progress>
+      <span id="progress-label">0%</span>
+    </section>
+
+    <section id="download-section" class="download-section" hidden>
+      <p>Your video is ready!</p>
+      <a id="download-link" class="btn btn-download" download>Download</a>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
