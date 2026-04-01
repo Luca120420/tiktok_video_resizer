@@ -187,9 +187,9 @@ if (typeof window !== 'undefined') {
 
 // ---------------------------------------------------------------------------
 // VideoProcessor
-// Decodes the source video frame-by-frame using a seek-loop, draws each
-// cropped frame onto an offscreen canvas, records via MediaRecorder, and
-// returns the final Blob.
+// Plays the source video at normal speed, draws each frame onto a cropped
+// canvas via requestVideoFrameCallback (rVFC), and records the canvas stream
+// with MediaRecorder. This ensures the full duration is captured correctly.
 // ---------------------------------------------------------------------------
 class VideoProcessor {
   constructor() {
@@ -199,10 +199,6 @@ class VideoProcessor {
   }
 
   /**
-   * Loads the file, seeks through every frame, draws each cropped frame onto
-   * an offscreen canvas, and records the result via MediaRecorder.
-   * Audio from the source video is merged into the recorded stream.
-   *
    * @param {File} file
    * @param {(ratio: number) => void} onProgress
    * @returns {Promise<Blob>}
@@ -212,105 +208,99 @@ class VideoProcessor {
 
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
-      video.muted = true;
+      // Do NOT mute — we need audio. playsInline for mobile.
       video.playsInline = true;
       video.preload = 'auto';
 
       const objectUrl = URL.createObjectURL(file);
       video.src = objectUrl;
 
-      video.addEventListener('loadedmetadata', async () => {
+      video.addEventListener('loadedmetadata', () => {
         try {
           const duration = video.duration;
-          const videoWidth = video.videoWidth;
-          const videoHeight = video.videoHeight;
+          const { sx, sy, sw, sh } = computeCropRect(video.videoWidth, video.videoHeight);
 
-          // Detect fps — fallback to 30
-          let fps = 30;
-          if (typeof video.mozFrameDelay !== 'undefined') {
-            fps = Math.round(1 / video.mozFrameDelay) || 30;
-          }
-          this.fps = fps;
-
-          const totalFrames = Math.round(duration * fps);
-
-          // Build the offscreen canvas sized to the crop rect
-          const { sx, sy, sw, sh } = computeCropRect(videoWidth, videoHeight);
+          // Output canvas sized to the crop rect
           const canvas = document.createElement('canvas');
           canvas.width = sw;
           canvas.height = sh;
           this.canvas = canvas;
           const ctx = canvas.getContext('2d');
 
-          // --- MediaRecorder setup ---
-          // Capture canvas video stream
-          const canvasStream = canvas.captureStream(fps);
+          // Draw one frame immediately so the canvas stream has content before
+          // MediaRecorder starts (avoids a blank first frame).
+          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
 
-          // Capture audio track from the source video and merge
+          // High-quality canvas stream — use detected or fallback fps
+          // captureStream(0) lets the browser decide the frame rate naturally.
+          const canvasStream = canvas.captureStream(0);
+
+          // Merge audio from the source video
           const combinedTracks = [...canvasStream.getVideoTracks()];
           if (typeof video.captureStream === 'function') {
-            const audioStream = video.captureStream();
-            audioStream.getAudioTracks().forEach((t) => combinedTracks.push(t));
+            video.captureStream().getAudioTracks().forEach(t => combinedTracks.push(t));
           }
           const combinedStream = new MediaStream(combinedTracks);
 
-          // Prefer MP4, fallback to WebM
-          const mimeType = MediaRecorder.isTypeSupported('video/mp4')
-            ? 'video/mp4'
-            : 'video/webm';
+          // Pick the best supported MIME type and use a high bitrate for quality
+          const mimeType = [
+            'video/webm;codecs=vp9',
+            'video/webm;codecs=vp8',
+            'video/webm',
+            'video/mp4',
+          ].find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
 
-          const recorder = new MediaRecorder(combinedStream, { mimeType });
+          // ~8 Mbps video + ~192 kbps audio — high quality
+          const recorder = new MediaRecorder(combinedStream, {
+            mimeType,
+            videoBitsPerSecond: 8_000_000,
+            audioBitsPerSecond: 192_000,
+          });
           const chunks = [];
-          recorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) chunks.push(e.data);
+          recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+
+          const cleanup = () => URL.revokeObjectURL(objectUrl);
+
+          // Use requestVideoFrameCallback if available (Chrome/Edge), otherwise
+          // fall back to timeupdate which fires ~4× per second — good enough for
+          // progress but rVFC gives per-frame accuracy.
+          const useRVFC = typeof video.requestVideoFrameCallback === 'function';
+
+          const drawFrame = () => {
+            if (this._cancelled) {
+              recorder.stop();
+              video.pause();
+              cleanup();
+              reject(new Error('Processing cancelled'));
+              return;
+            }
+            ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+            onProgress(Math.min(video.currentTime / duration, 1));
+            if (!video.ended && !video.paused) {
+              if (useRVFC) video.requestVideoFrameCallback(drawFrame);
+            }
           };
 
-          // Start recording before the seek-loop
-          recorder.start();
+          video.addEventListener('ended', async () => {
+            // Draw the very last frame
+            ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+            onProgress(1);
 
-          // Seek-loop: render each frame in order
-          for (let i = 0; i < totalFrames; i++) {
-            if (this._cancelled) {
-              recorder.stop();
-              URL.revokeObjectURL(objectUrl);
-              reject(new Error('Processing cancelled'));
-              return;
-            }
-
-            // Seek to the target time for this frame
-            await new Promise((seekResolve) => {
-              const onSeeked = () => {
-                video.removeEventListener('seeked', onSeeked);
-                seekResolve();
-              };
-              video.addEventListener('seeked', onSeeked);
-              video.currentTime = i / fps;
-            });
-
-            if (this._cancelled) {
-              recorder.stop();
-              URL.revokeObjectURL(objectUrl);
-              reject(new Error('Processing cancelled'));
-              return;
-            }
-
-            // Draw the cropped frame onto the offscreen canvas
-            ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-
-            // Report progress (0 → approaching 1, never exactly 1 until done)
-            onProgress(i / totalFrames);
-          }
-
-          // Stop the recorder and collect the Blob
-          await new Promise((stopResolve) => {
-            recorder.onstop = () => stopResolve();
-            recorder.stop();
+            await new Promise(res => { recorder.onstop = res; recorder.stop(); });
+            cleanup();
+            resolve(new Blob(chunks, { type: mimeType }));
           });
 
-          URL.revokeObjectURL(objectUrl);
+          if (!useRVFC) {
+            // Fallback: draw on every timeupdate event
+            video.addEventListener('timeupdate', drawFrame);
+          }
 
-          const blob = new Blob(chunks, { type: mimeType });
-          resolve(blob);
+          recorder.start();
+
+          if (useRVFC) video.requestVideoFrameCallback(drawFrame);
+          video.play().catch(err => { cleanup(); reject(err); });
+
         } catch (err) {
           URL.revokeObjectURL(objectUrl);
           reject(err);
@@ -324,7 +314,6 @@ class VideoProcessor {
     });
   }
 
-  /** Signals the seek-loop to stop at the next frame boundary. */
   cancel() {
     this._cancelled = true;
   }
