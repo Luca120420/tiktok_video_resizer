@@ -252,11 +252,16 @@ class VideoProcessor {
           }
           const combinedStream = new MediaStream(combinedTracks);
 
+          // Prefer H.264/AAC in MP4 — best compatibility on Windows and TikTok.
+          // Fall back to VP9/VP8 in WebM if MP4 is not supported (Firefox).
           const mimeType = [
+            'video/mp4;codecs=avc1.42E01E,mp4a.40.2', // H.264 Baseline + AAC-LC
+            'video/mp4;codecs=avc1,mp4a.40.2',
+            'video/mp4;codecs=avc1',
+            'video/mp4',
             'video/webm;codecs=vp9',
             'video/webm;codecs=vp8',
             'video/webm',
-            'video/mp4',
           ].find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
 
           const recorder = new MediaRecorder(combinedStream, {
