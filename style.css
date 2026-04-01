@@ -172,6 +172,11 @@ progress::-moz-progress-bar {
   gap: 0.75rem;
 }
 
+/* Ensure [hidden] always wins over display:flex/block set by component classes */
+[hidden] {
+  display: none !important;
+}
+
 .download-section p {
   color: #25f4ee;
   font-weight: 600;
